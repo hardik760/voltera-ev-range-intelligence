@@ -6,3 +6,12 @@ test_waterfall.png
 fix_narrative.py
 run_shap_fix.py
 update_docs.py
+
+# Internal AI and planning documents
+JUDGE_QA.md
+data/EV_Hackathon_EdgeCases_and_Strategy.md
+reports/AI_PROJECT_CONTEXT.md
+reports/COMPETITION_EVALUATION.md
+reports/FINAL_JUDGING_REPORT.md
+reports/STRICT_JUDGE_REPORT.md
+reports/technical_report.md
