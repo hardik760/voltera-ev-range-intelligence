@@ -1,0 +1,12 @@
+name,formula,interpretation,inputs,leakage_risk
+battery_per_seat,battery_capacity_kWh / seats,Energy available per passenger — higher values suggest more range budget per seat,"['battery_capacity_kWh', 'seats']",none
+footprint_m2,(length_mm * width_mm) / 1e6,Vehicle ground footprint in m² — proxy for aerodynamic frontal area and overall vehicle size,"['length_mm', 'width_mm']",none
+volume_proxy_m3,(length_mm * width_mm * height_mm) / 1e9,Approximate bounding-box volume — proxy for vehicle mass and air resistance,"['length_mm', 'width_mm', 'height_mm']",none
+battery_per_volume,battery_capacity_kWh / volume_proxy_m3,Battery energy density relative to vehicle size — measures how efficiently the battery pack fills the vehicle,"['battery_capacity_kWh', 'length_mm', 'width_mm', 'height_mm']",none
+battery_per_footprint,battery_capacity_kWh / footprint_m2,Battery capacity normalised by ground footprint — captures energy density per unit of vehicle area,"['battery_capacity_kWh', 'length_mm', 'width_mm']",none
+torque_per_seat,torque_nm / seats,Motor torque per passenger — proxy for per-passenger performance capability,"['torque_nm', 'seats']",none
+torque_per_volume,torque_nm / volume_proxy_m3,Torque relative to vehicle size — indicates power density that affects energy consumption,"['torque_nm', 'length_mm', 'width_mm', 'height_mm']",none
+aspect_ratio,length_mm / width_mm,Length-to-width ratio — captures vehicle proportions relevant to aerodynamics,"['length_mm', 'width_mm']",none
+height_ratio,height_mm / length_mm,Height-to-length ratio — taller vehicles relative to length have worse aerodynamics,"['height_mm', 'length_mm']",none
+charging_per_battery,fast_charging_power_kw_dc / battery_capacity_kWh,"Fast-charge C-rate proxy — higher values indicate the battery can accept charge faster relative to its size, which often correlates with premium battery technology","['fast_charging_power_kw_dc', 'battery_capacity_kWh']",none
+battery_per_towing,battery_capacity_kWh / (towing_capacity_kg + 1),Battery capacity relative to towing ability — vehicles designed for towing need more energy per km,"['battery_capacity_kWh', 'towing_capacity_kg']",none
