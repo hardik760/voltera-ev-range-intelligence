@@ -1,0 +1,7 @@
+{
+  "train_size": 382,
+  "test_size": 96,
+  "train_mean_range": 395.07,
+  "test_mean_range": 385.68,
+  "random_seed": 42
+}
