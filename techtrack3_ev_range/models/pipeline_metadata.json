@@ -1,0 +1,42 @@
+{
+  "model_name": "Tuned XGBoost",
+  "feature_set": "specs_plus_engineered",
+  "numeric_features": [
+    "battery_capacity_kWh",
+    "top_speed_kmh",
+    "torque_nm",
+    "acceleration_0_100_s",
+    "fast_charging_power_kw_dc",
+    "towing_capacity_kg",
+    "cargo_volume_l",
+    "seats",
+    "length_mm",
+    "width_mm",
+    "height_mm",
+    "battery_per_seat",
+    "footprint_m2",
+    "volume_proxy_m3",
+    "battery_per_volume",
+    "battery_per_footprint",
+    "torque_per_seat",
+    "torque_per_volume",
+    "aspect_ratio",
+    "height_ratio",
+    "charging_per_battery",
+    "battery_per_towing"
+  ],
+  "categorical_features": [
+    "drivetrain",
+    "segment",
+    "car_body_type"
+  ],
+  "target": "range_km",
+  "n_training_samples": 478,
+  "final_test_metrics": {
+    "test_MAE": 9.75,
+    "test_RMSE": 14.11,
+    "test_R2": 0.9818,
+    "test_MedianAE": 5.86,
+    "test_MAPE": 2.49
+  }
+}
