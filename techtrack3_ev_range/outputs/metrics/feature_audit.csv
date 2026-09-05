@@ -1,0 +1,23 @@
+column,dtype,missing_count,missing_pct,unique_count,semantic_type,candidate_role,leakage_risk,reason
+brand,str,0,0.0,59,CATEGORICAL PREDICTOR,E,low,test with/without via ablation
+model,object,1,0.2,477,IDENTIFIER,C,high,unique per row — not predictive
+top_speed_kmh,int64,0,0.0,38,NUMERIC PREDICTOR,D,none,performance spec
+battery_capacity_kWh,float64,0,0.0,121,NUMERIC PREDICTOR,D,none,primary range determinant
+battery_type,str,0,0.0,1,EDA-ONLY,G,none,zero variance (all Lithium-ion)
+number_of_cells,float64,202,42.3,38,OPTIONAL,F,none,42% missing — test via ablation
+torque_nm,float64,7,1.5,128,NUMERIC PREDICTOR,D,none,"motor spec, 1.5% missing"
+efficiency_wh_per_km,int64,0,0.0,112,FORBIDDEN/LEAKAGE,B,high,algebraic relationship with target
+range_km,int64,0,0.0,88,TARGET,A,n/a,regression target
+acceleration_0_100_s,float64,0,0.0,97,NUMERIC PREDICTOR,D,none,performance spec
+fast_charging_power_kw_dc,float64,1,0.2,71,NUMERIC PREDICTOR,D,none,"charging spec, 1 missing"
+fast_charge_port,str,1,0.2,2,EDA-ONLY,G,none,99.8% CCS — near-zero variance
+towing_capacity_kg,float64,26,5.4,26,NUMERIC PREDICTOR,D,none,"utility spec, 5.4% missing"
+cargo_volume_l,object,1,0.2,140,NUMERIC PREDICTOR,D,none,"utility spec, cleaned"
+seats,int64,0,0.0,7,NUMERIC PREDICTOR,D,none,utility spec
+drivetrain,str,0,0.0,3,CATEGORICAL PREDICTOR,E,none,AWD/FWD/RWD — 3 levels
+segment,str,0,0.0,15,CATEGORICAL PREDICTOR,E,none,market segment — 15 levels
+length_mm,int64,0,0.0,172,NUMERIC PREDICTOR,D,none,dimension
+width_mm,int64,0,0.0,108,NUMERIC PREDICTOR,D,none,dimension
+height_mm,int64,0,0.0,162,NUMERIC PREDICTOR,D,none,dimension
+car_body_type,str,0,0.0,8,CATEGORICAL PREDICTOR,E,none,body style — 8 levels
+source_url,str,0,0.0,478,IDENTIFIER/METADATA,C,high,unique per row — metadata
