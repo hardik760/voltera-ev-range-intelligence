@@ -1,0 +1,4 @@
+model,cv_MAE,cv_MAE_std,cv_RMSE,cv_RMSE_std,cv_R2,cv_R2_std
+Tuned XGBoost,12.36,2.03,18.05,3.98,0.9652,0.0184
+Tuned Gradient Boosting,12.43,2.07,18.43,3.81,0.9637,0.0188
+Tuned LightGBM,12.78,2.2,18.37,3.46,0.9638,0.0182
