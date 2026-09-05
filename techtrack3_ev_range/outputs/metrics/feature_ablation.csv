@@ -1,0 +1,5 @@
+feature_set,description,n_numeric,n_categorical,cv_MAE,cv_MAE_std,cv_RMSE,cv_RMSE_std,cv_R2,cv_R2_std
+specs_plus_engineered,Specifications + all engineered features,22,3,13.06,2.08,19.8,3.75,0.9579,0.0218
+specs_engineered_cells,Specs + engineered + number_of_cells,23,3,13.21,1.79,20.12,3.38,0.9573,0.0208
+specs_engineered_brand,Specifications + engineered + brand encoding,22,4,13.28,1.95,20.01,3.92,0.9571,0.0216
+raw_specs_only,Raw specification columns only,11,3,15.16,2.57,21.16,4.57,0.9512,0.0252
