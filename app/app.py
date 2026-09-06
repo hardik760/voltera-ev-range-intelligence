@@ -346,7 +346,7 @@ def main():
     )
 
     # Model info in sidebar
-    with st.sidebar.expander("📊 Model Information", expanded=False):
+    with st.sidebar.expander("Model Information", expanded=False):
         model_name = metadata.get("final_model_name", "N/A")
         st.write(f"**Final Model:** {model_name}")
 
