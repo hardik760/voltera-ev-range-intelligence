@@ -2,7 +2,7 @@
 
 ## EV Range Intelligence: Specification-Based Driving Range Prediction
 
-**Team Voltra** | MANIT Bhopal EV Day 2026
+**Team Voltera** | MANIT Bhopal EV Day 2026
 
 ---
 
