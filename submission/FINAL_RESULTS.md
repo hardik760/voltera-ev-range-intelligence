@@ -22,6 +22,6 @@ Our domain-engineered features out-predicted raw specifications. The top 3 most 
 3. `height_ratio`: Aerodynamic profile proxy.
 
 ## 5. Model Architecture
-- **Preprocessing:** Median imputation for numerics, Frequent imputation + One-Hot for categoricals.
+- **Preprocessing:** Median imputation for numerics, OrdinalEncoder for categoricals (with unknown value = -1).
 - **Model:** A robust **Voting Ensemble** of Gradient Boosting (`GradientBoostingRegressor`), Histogram-based Gradient Boosting (`HistGradientBoostingRegressor`), and LightGBM (`LGBMRegressor`).
 - **Tuning:** Extensive hyperparameter search using 10-fold cross-validation.
