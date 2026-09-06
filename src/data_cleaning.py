@@ -266,8 +266,8 @@ def clean_data(data_dir: str) -> pd.DataFrame:
     print("\n--- Range Validation ---")
     df = validate_ranges(df)
 
-    # Drop zero-variance and metadata columns
-    drop_cols = ["battery_type", "source_url"]
+    # Drop zero-variance, near-zero-variance, and metadata columns
+    drop_cols = ["battery_type", "fast_charge_port", "source_url"]
     df = df.drop(columns=drop_cols, errors="ignore")
     print(f"\n✓ Dropped zero-variance/metadata columns: {drop_cols}")
 
