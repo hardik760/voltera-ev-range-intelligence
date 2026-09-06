@@ -15,3 +15,9 @@ reports/COMPETITION_EVALUATION.md
 reports/FINAL_JUDGING_REPORT.md
 reports/STRICT_JUDGE_REPORT.md
 reports/technical_report.md
+
+# Hackathon non-judge facing items
+/*.pdf
+/*.xls
+submission/SUBMISSION_CHECKLIST.md
+submission/UPLOAD_GUIDE.md
