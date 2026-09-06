@@ -1,6 +1,6 @@
 # TECHTRACK 3.0 — EV Range Prediction from Specifications
 
-## Team Voltra | MANIT Bhopal EV Day 2026
+## Team Voltera | MANIT Bhopal EV Day 2026
 
 ---
 
