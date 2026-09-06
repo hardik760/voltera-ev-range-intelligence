@@ -10,10 +10,10 @@ We completely eliminated the algebraic target leakage present in naive models by
 
 ## 3. Results
 - **Test Set (n=96, 20% holdout):**
-  - **Mean Absolute Error:** ~10.0 km
-  - **R-squared:** 0.983
-  - **Mean Absolute Percentage Error:** 2.5%
-- **Physical Plausibility:** 100% of our predictions imply a realistic energy efficiency (80 - 400 Wh/km).
+  - **Mean Absolute Error:** 9.96 km
+  - **R-squared:** 0.9834
+  - **Mean Absolute Percentage Error:** 2.53%
+- **Physical Plausibility:** 100% of our predictions imply a realistic energy efficiency (post-prediction check).
 
 ## 4. Winning Features
 Our domain-engineered features out-predicted raw specifications. The top 3 most important drivers of EV range according to our model's SHAP values:
