@@ -1,7 +1,12 @@
 {
-  "train_size": 382,
-  "test_size": 96,
+  "development_train_size": 382,
+  "holdout_test_size": 96,
+  "final_deployment_fit_size": 478,
   "train_mean_range": 395.07,
   "test_mean_range": 385.68,
-  "random_seed": 42
+  "train_std_range": 102.72,
+  "test_std_range": 104.63,
+  "random_seed": 42,
+  "split_method": "stratified by car_body_type (rare types grouped)",
+  "test_fraction": 0.2
 }

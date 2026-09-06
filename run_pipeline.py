@@ -17,6 +17,10 @@ This script runs the ENTIRE ML workflow end-to-end:
   12. Save pipeline artifact
 
 All results are saved to outputs/ for the notebook and report.
+
+LEAKAGE POLICY: efficiency_wh_per_km is NEVER used as a model input,
+engineered feature, or training target transformation. It appears ONLY in
+EDA visualisation and post-prediction physics sanity checking.
 """
 
 import os
@@ -38,7 +42,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_ROOT)
 
-from src.data_cleaning import clean_data, load_raw_data, build_feature_audit
+from src.data_cleaning import clean_data, load_raw_data, build_feature_audit, audit_missing
 from src.feature_engineering import (
     engineer_features, get_engineered_feature_names,
     get_feature_registry_df, leakage_audit,
@@ -108,10 +112,28 @@ print("=" * 70)
 raw_df = load_raw_data(DATA_RAW)
 print(f"Raw data loaded: {raw_df.shape}")
 
+# Save data quality audit
+missing_summary = audit_missing(raw_df)
+missing_summary.to_csv(os.path.join(METRICS_DIR, "missing_value_summary.csv"), index=False)
+print("Missing value summary saved.")
+
 # Save feature audit table
 audit_table = build_feature_audit(raw_df)
 audit_table.to_csv(os.path.join(METRICS_DIR, "feature_audit.csv"), index=False)
 print("Feature audit saved.")
+
+# Save data quality audit (combined)
+quality_audit = pd.DataFrame({
+    "column": raw_df.columns,
+    "dtype": raw_df.dtypes.astype(str).values,
+    "missing_count": raw_df.isnull().sum().values,
+    "missing_pct": (raw_df.isnull().sum() / len(raw_df) * 100).round(2).values,
+    "unique_count": raw_df.nunique().values,
+    "has_zero_variance": [(raw_df[c].nunique() <= 1) for c in raw_df.columns],
+    "sample_values": [str(raw_df[c].dropna().head(3).tolist()) for c in raw_df.columns],
+})
+quality_audit.to_csv(os.path.join(METRICS_DIR, "data_quality_audit.csv"), index=False)
+print("Data quality audit saved.")
 
 # Clean
 df = clean_data(DATA_RAW)
@@ -172,8 +194,10 @@ stats.probplot(df[TARGET], dist="norm", plot=axes[1])
 axes[1].set_title("Q-Q Plot of range_km")
 save_fig("01_target_distribution")
 
-# -- Correlation heatmap (numeric features + target + efficiency for EDA) --
-eda_numeric = NUMERIC_FEATURES_CORE + ["efficiency_wh_per_km", TARGET]
+# -- Correlation heatmap (numeric features + target + efficiency for EDA ONLY) --
+# Load raw for efficiency EDA
+raw_for_eda = load_raw_data(DATA_RAW)
+eda_numeric = NUMERIC_FEATURES_CORE + [TARGET]
 eda_cols_present = [c for c in eda_numeric if c in df.columns]
 corr = df[eda_cols_present].corr()
 
@@ -181,7 +205,7 @@ fig, ax = plt.subplots(figsize=(12, 10))
 mask = np.triu(np.ones_like(corr, dtype=bool), k=1)
 sns.heatmap(corr, mask=mask, annot=True, fmt=".2f", cmap="RdBu_r",
             center=0, vmin=-1, vmax=1, ax=ax, square=True)
-ax.set_title("Correlation Matrix (including efficiency for EDA only)")
+ax.set_title("Correlation Matrix (legitimate features + target)")
 save_fig("02_correlation_heatmap")
 
 # -- Battery capacity vs Range (key relationship) --
@@ -256,22 +280,30 @@ for i, col in enumerate(dims):
     axes[i].set_title(f"{col} vs range (r={r:.3f})")
 save_fig("08_dimensions_vs_range")
 
-# -- Efficiency EDA (forbidden feature analysis) --
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-axes[0].scatter(df["efficiency_wh_per_km"], df[TARGET], alpha=0.5, s=20, color="red")
-r = df[["efficiency_wh_per_km", TARGET]].corr().iloc[0, 1]
-axes[0].set_xlabel("efficiency_wh_per_km")
-axes[0].set_ylabel("range_km")
-axes[0].set_title(f"Efficiency vs Range (r={r:.3f}) — FORBIDDEN as model input")
-# Show the algebraic relationship: range ≈ battery_capacity * 1000 / efficiency
-computed_range = df["battery_capacity_kWh"] * 1000 / df["efficiency_wh_per_km"]
-axes[1].scatter(computed_range, df[TARGET], alpha=0.5, s=20, color="red")
-r2 = computed_range.corr(df[TARGET])
-axes[1].set_xlabel("kWh × 1000 / efficiency (computed)")
-axes[1].set_ylabel("actual range_km")
-axes[1].set_title(f"Algebraic reconstruction (r={r2:.3f}) — WHY it's excluded")
-axes[1].plot([100, 700], [100, 700], "k--", alpha=0.5)
-save_fig("09_efficiency_leakage_analysis")
+# -- Efficiency EDA (FORBIDDEN FEATURE ANALYSIS — EDA ONLY) --
+# We use the raw data which still has the efficiency column
+if "efficiency_wh_per_km" in raw_for_eda.columns:
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    
+    eff_vals = raw_for_eda["efficiency_wh_per_km"]
+    range_vals = raw_for_eda["range_km"]
+    batt_vals = raw_for_eda["battery_capacity_kWh"]
+    
+    axes[0].scatter(eff_vals, range_vals, alpha=0.5, s=20, color="red")
+    r = eff_vals.corr(range_vals)
+    axes[0].set_xlabel("efficiency_wh_per_km")
+    axes[0].set_ylabel("range_km")
+    axes[0].set_title(f"Efficiency vs Range (r={r:.3f})\nEDA ONLY — FORBIDDEN AS MODEL INPUT")
+    
+    # Show the algebraic relationship: range ≈ battery_capacity * 1000 / efficiency
+    computed_range = batt_vals * 1000 / eff_vals
+    axes[1].scatter(computed_range, range_vals, alpha=0.5, s=20, color="red")
+    r2 = computed_range.corr(range_vals)
+    axes[1].set_xlabel("kWh × 1000 / efficiency (computed)")
+    axes[1].set_ylabel("actual range_km")
+    axes[1].set_title(f"Algebraic reconstruction (r={r2:.3f})\nWHY efficiency is excluded")
+    axes[1].plot([100, 700], [100, 700], "k--", alpha=0.5)
+    save_fig("09_efficiency_leakage_analysis")
 
 print(f"\nAll EDA figures saved to {FIG_DIR}")
 
@@ -286,30 +318,35 @@ print("=" * 70)
 y = df[TARGET].values
 X = df.copy()
 
-# Group rare body types for stable stratification (preventing 1-item classes from crashing CV/split)
+# Group rare body types for stable stratification
 stratify_col = df["car_body_type"].replace({
     "Coupe": "Sedan",
     "Cabriolet": "Hatchback",
     "Small Passenger Van": "SUV"
 })
 
-# Stratified split using the binned vehicle body type to prevent SUV dominance bias
+# Stratified split using the binned vehicle body type
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=SEED, stratify=stratify_col,
 )
 
-print(f"Training set: {X_train.shape[0]} rows")
-print(f"Test set:     {X_test.shape[0]} rows")
+print(f"Development training set: {X_train.shape[0]} rows")
+print(f"Holdout test set:         {X_test.shape[0]} rows")
 print(f"Train range stats: mean={y_train.mean():.1f}, std={y_train.std():.1f}")
 print(f"Test  range stats: mean={y_test.mean():.1f}, std={y_test.std():.1f}")
 
-# Save split indices for reproducibility
+# Save split info
 split_info = {
-    "train_size": int(X_train.shape[0]),
-    "test_size": int(X_test.shape[0]),
+    "development_train_size": int(X_train.shape[0]),
+    "holdout_test_size": int(X_test.shape[0]),
+    "final_deployment_fit_size": int(len(df)),
     "train_mean_range": round(float(y_train.mean()), 2),
     "test_mean_range": round(float(y_test.mean()), 2),
+    "train_std_range": round(float(y_train.std()), 2),
+    "test_std_range": round(float(y_test.std()), 2),
     "random_seed": SEED,
+    "split_method": "stratified by car_body_type (rare types grouped)",
+    "test_fraction": 0.2,
 }
 with open(os.path.join(METRICS_DIR, "split_info.json"), "w") as f:
     json.dump(split_info, f, indent=2)
@@ -424,8 +461,9 @@ for set_name, config in feat_sets.items():
 
 # Test with number_of_cells added
 num_with_cells = NUMERIC_FEATURES_CORE + ENGINEERED_FEATURES + ["number_of_cells"]
+model_inst, needs_scale, complexity = candidates[ablation_model_name]
 pipeline_cells = build_full_pipeline(
-    model_cls(**model_params), num_with_cells, CATEGORICAL_FEATURES, scale=needs_scale
+    type(model_inst)(**model_inst.get_params()), num_with_cells, CATEGORICAL_FEATURES, scale=needs_scale
 )
 cv_res_cells = run_cross_validation(pipeline_cells, X_train, y_train, cv=cv_folds)
 ablation_results.append({
@@ -485,10 +523,7 @@ for model_name in top_models_to_tune:
     model_inst, needs_scale, complexity = candidates[model_name]
 
     model_cls = type(model_inst)
-    model_params_clean = {k: v for k, v in model_inst.get_params().items()
-                          if k not in ["random_state"]}
-    fresh_model = model_cls(random_state=SEED, **{k: v for k, v in model_params_clean.items()
-                                                    if k != "random_state"})
+    fresh_model = model_cls(**model_inst.get_params())
 
     pipeline = build_full_pipeline(
         fresh_model,
@@ -538,14 +573,7 @@ for name, pipe in best_tuned_pipelines.items():
     ensemble_base_cv[name] = cv_res
     print(f"  Tuned {name:30s} | CV MAE: {cv_res['cv_MAE']:.2f} | CV R²: {cv_res['cv_R2']:.4f}")
 
-# Build ensembles from the tuned models
-# For ensembles, we need the model steps from each pipeline
-base_models_for_ensemble = {}
-for name, pipe in best_tuned_pipelines.items():
-    base_models_for_ensemble[name] = pipe
-
 # Voting ensemble — average predictions of tuned pipelines
-# We need to use VotingRegressor with the full pipelines
 from sklearn.ensemble import VotingRegressor
 
 voting_estimators = [(name, pipe) for name, pipe in best_tuned_pipelines.items()]
@@ -612,34 +640,12 @@ print(f"Selected final model: {best_model_name}")
 # Fit on full training data
 final_pipeline.fit(X_train, y_train)
 
-# Compute medians strictly on training data for the Naive Baseline Comparison
-segment_medians = X_train.groupby("segment")["efficiency_wh_per_km"].median().to_dict()
-global_median = X_train["efficiency_wh_per_km"].median()
-
-# Naive Physics Baseline Comparison
-def get_naive_predictions(X):
-    preds = []
-    for _, row in X.iterrows():
-        eff = segment_medians.get(row.get('segment'), global_median)
-        batt = row.get('battery_capacity_kWh', 0)
-        if pd.isna(batt) or batt <= 0 or pd.isna(eff) or eff <= 0:
-            preds.append(0.0)
-        else:
-            preds.append((batt * 1000) / eff)
-    return np.array(preds)
-
-naive_test_preds = get_naive_predictions(X_test)
-from sklearn.metrics import mean_absolute_error
-naive_mae = mean_absolute_error(y_test, naive_test_preds)
-print(f"\n--- NAIVE PHYSICS BASELINE ---")
-print(f"  MAE: {naive_mae:.2f} km")
-
 # Predict on test set
 y_test_pred = final_pipeline.predict(X_test)
 
 # Final test metrics
 final_test_metrics = regression_metrics(y_test, y_test_pred, prefix="test")
-print(f"\n--- FINAL TEST SET EVALUATION ---")
+print(f"\n--- FINAL HOLDOUT TEST SET EVALUATION ---")
 for k, v in final_test_metrics.items():
     print(f"  {k}: {v}")
 
@@ -730,8 +736,15 @@ print("=" * 70)
 
 # Get feature names from the pipeline
 try:
-    preprocessor = final_pipeline.named_steps.get("preprocessor") or \
-                   final_pipeline.estimators_[0][1].named_steps.get("preprocessor")
+    if hasattr(final_pipeline, "named_steps") and "preprocessor" in final_pipeline.named_steps:
+        preprocessor = final_pipeline.named_steps["preprocessor"]
+    elif hasattr(final_pipeline, "estimators_"):
+        # For voting/stacking, use first base estimator's preprocessor
+        first_pipe = final_pipeline.estimators_[0]
+        if hasattr(first_pipe, "named_steps"):
+            preprocessor = first_pipe.named_steps["preprocessor"]
+        else:
+            preprocessor = first_pipe[1].named_steps["preprocessor"]
     feature_names = list(preprocessor.get_feature_names_out())
 except Exception:
     feature_names = best_feat_config["numeric"] + best_feat_config["categorical"]
@@ -741,9 +754,15 @@ print(f"Feature names ({len(feature_names)}): {feature_names}")
 # Permutation importance on test set
 print("\n--- Permutation Importance (Test Set) ---")
 try:
+    # For ensemble models, permutation importance works on the raw input columns
+    # The feature_names from the preprocessor may not match X_test dimensions
+    # Use column names from X_test that are actually used by the pipeline
+    input_feature_names = list(X_test.columns)
     perm_imp = compute_permutation_importance(
-        final_pipeline, X_test, y_test, feature_names=feature_names, n_repeats=15
+        final_pipeline, X_test, y_test, feature_names=input_feature_names, n_repeats=15
     )
+    # Filter to only show features with non-trivial importance
+    perm_imp = perm_imp[perm_imp["importance_mean"] > 0.01]
     print(perm_imp.head(15).to_string(index=False))
     perm_imp.to_csv(os.path.join(METRICS_DIR, "permutation_importance.csv"), index=False)
 
@@ -767,11 +786,15 @@ try:
         preprocessor_for_shap = final_pipeline.named_steps["preprocessor"]
         X_test_transformed = preprocessor_for_shap.transform(X_test)
     elif hasattr(final_pipeline, "estimators_"):
-        # For voting/stacking, use first base model
-        first_pipe = final_pipeline.estimators_[0]
-        model_for_shap = first_pipe.named_steps["model"]
-        preprocessor_for_shap = first_pipe.named_steps["preprocessor"]
+        # For voting/stacking, use first base model for SHAP
+        first_est = final_pipeline.estimators_[0]
+        if isinstance(first_est, tuple):
+            first_est = first_est[1]
+        model_for_shap = first_est.named_steps["model"]
+        preprocessor_for_shap = first_est.named_steps["preprocessor"]
         X_test_transformed = preprocessor_for_shap.transform(X_test)
+        print("  Note: SHAP shows first component model of ensemble. "
+              "Permutation importance above reflects the complete model.")
     else:
         raise ValueError("Cannot extract model for SHAP")
 
@@ -805,10 +828,11 @@ except Exception as e:
 # STEP 12: PHYSICS-AWARE SANITY CHECK
 # ============================================================
 print("\n" + "=" * 70)
-print("STEP 12: PHYSICS-AWARE SANITY CHECK")
+print("STEP 12: PHYSICS-AWARE SANITY CHECK (post-prediction only)")
 print("=" * 70)
 
 # Use efficiency_wh_per_km ONLY for post-prediction validation
+# Pull from raw data since it was dropped during cleaning
 efficiency_test = raw_df.loc[X_test.index, "efficiency_wh_per_km"].values
 battery_test = X_test["battery_capacity_kWh"].values
 
@@ -837,7 +861,7 @@ lims = [80, 400]
 axes[0].plot(lims, lims, "r--", alpha=0.7)
 axes[0].set_xlabel("Implied Wh/km (from prediction)")
 axes[0].set_ylabel("Actual Wh/km")
-axes[0].set_title("Physics Sanity — Implied vs Actual Efficiency")
+axes[0].set_title("Physics Sanity — Implied vs Actual Efficiency\n(post-prediction validation only — NOT a model input)")
 
 axes[1].hist(sanity["implied_wh_per_km"], bins=20, alpha=0.6, color=PALETTE[0], label="Implied")
 axes[1].hist(sanity["actual_wh_per_km"], bins=20, alpha=0.6, color=PALETTE[3], label="Actual")
@@ -865,25 +889,29 @@ print(f"Pipeline size: {os.path.getsize(pipeline_path) / 1024:.1f} KB")
 
 # Save metadata about what features the pipeline expects
 pipeline_meta = {
-    "model_name": best_model_name,
-    "feature_set": best_feat_set_name,
+    "final_model_name": best_model_name,
+    "feature_set_name": best_feat_set_name,
     "numeric_features": best_feat_config["numeric"],
     "categorical_features": best_feat_config["categorical"],
+    "engineered_features": [f for f in best_feat_config["numeric"] if f in ENGINEERED_FEATURES],
     "target": TARGET,
-    "n_training_samples": len(df),
-    "final_test_metrics": final_test_metrics,
+    "forbidden_features": ["efficiency_wh_per_km", "range_km", "source_url"],
+    "development_train_size": int(X_train.shape[0]),
+    "holdout_test_size": int(X_test.shape[0]),
+    "final_deployment_fit_size": int(len(df)),
+    "seed": SEED,
+    "validation_strategy": "10-fold CV on training data, single holdout evaluation",
+    "test_metrics": {k: float(v) if isinstance(v, (np.floating, np.integer)) else v 
+                     for k, v in final_test_metrics.items()},
+    "cv_metrics": {
+        "cv_MAE": float(best_entry.get("cv_MAE", 0)),
+        "cv_MAE_std": float(best_entry.get("cv_MAE_std", 0)),
+        "cv_R2": float(best_entry.get("cv_R2", 0)),
+        "cv_R2_std": float(best_entry.get("cv_R2_std", 0)),
+    },
 }
 with open(os.path.join(MODEL_DIR, "pipeline_metadata.json"), "w") as f:
-    clean_meta = {}
-    for k, v in pipeline_meta.items():
-        if isinstance(v, dict):
-            clean_meta[k] = {kk: (float(vv) if isinstance(vv, (np.floating, np.integer)) else vv)
-                             for kk, vv in v.items()}
-        elif isinstance(v, (np.floating, np.integer)):
-            clean_meta[k] = float(v)
-        else:
-            clean_meta[k] = v
-    json.dump(clean_meta, f, indent=2)
+    json.dump(pipeline_meta, f, indent=2)
 
 print("Pipeline metadata saved.")
 
@@ -918,7 +946,7 @@ checks = {
 
 all_passed = True
 for check, result in checks.items():
-    status = "✓" if result else "✗"
+    status = "PASS" if result else "FAIL"
     print(f"  [{status}] {check}")
     if not result:
         all_passed = False

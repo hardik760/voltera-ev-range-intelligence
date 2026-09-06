@@ -3,6 +3,8 @@ TECHTRACK 3.0 — Preprocessing Module
 
 Builds sklearn Pipelines and ColumnTransformers for reproducible
 preprocessing. All transformers are fitted on training data only.
+
+LEAKAGE POLICY: No reference to efficiency_wh_per_km anywhere in this module.
 """
 
 import numpy as np
@@ -12,7 +14,6 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import (
     StandardScaler,
     OrdinalEncoder,
-    FunctionTransformer,
 )
 from sklearn.impute import SimpleImputer
 
@@ -125,7 +126,6 @@ def build_preprocessor(
         ("encoder", OrdinalEncoder(
             handle_unknown="use_encoded_value",
             unknown_value=-1,
-            # We don't specify categories= here to let it learn from training data
         )),
     ])
 
@@ -143,15 +143,18 @@ def build_preprocessor(
 
 
 def build_full_pipeline(model, numeric_features, categorical_features, scale=False):
-    """Build a complete preprocessing + model pipeline, wrapped for Physics Residuals."""
+    """
+    Build a complete preprocessing + model pipeline.
+
+    Returns a standard sklearn Pipeline: preprocessor → model.
+    NO target leakage wrapper. The model predicts range_km directly.
+    """
     preprocessor = build_preprocessor(numeric_features, categorical_features, scale)
     pipeline = Pipeline([
         ("preprocessor", preprocessor),
         ("model", model),
     ])
-    
-    from src.physics import PhysicsResidualRegressor
-    return PhysicsResidualRegressor(base_pipeline=pipeline)
+    return pipeline
 
 
 def get_feature_names_from_pipeline(pipeline) -> list:

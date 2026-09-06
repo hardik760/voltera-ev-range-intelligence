@@ -1,4 +1,6 @@
 model,cv_MAE,cv_MAE_std,cv_RMSE,cv_RMSE_std,cv_R2,cv_R2_std
-Tuned XGBoost,12.36,2.03,18.05,3.98,0.9652,0.0184
-Tuned Gradient Boosting,12.43,2.07,18.43,3.81,0.9637,0.0188
-Tuned LightGBM,12.78,2.2,18.37,3.46,0.9638,0.0182
+Voting Ensemble,11.68,2.47,17.49,4.57,0.9672,0.0195
+Tuned Gradient Boosting,11.76,2.55,17.62,4.19,0.9667,0.0195
+Stacking Ensemble,11.92,2.45,17.81,4.81,0.9658,0.0209
+Tuned HistGradientBoosting,12.38,2.5,18.61,4.62,0.963,0.0201
+Tuned Extra Trees,13.0,2.65,19.08,4.76,0.9612,0.0225

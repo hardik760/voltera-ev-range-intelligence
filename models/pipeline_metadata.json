@@ -1,6 +1,6 @@
 {
-  "model_name": "Tuned XGBoost",
-  "feature_set": "specs_plus_engineered",
+  "final_model_name": "Voting Ensemble",
+  "feature_set_name": "specs_engineered_cells",
   "numeric_features": [
     "battery_capacity_kWh",
     "top_speed_kmh",
@@ -23,20 +23,49 @@
     "aspect_ratio",
     "height_ratio",
     "charging_per_battery",
-    "battery_per_towing"
+    "battery_per_towing",
+    "number_of_cells"
   ],
   "categorical_features": [
     "drivetrain",
     "segment",
     "car_body_type"
   ],
+  "engineered_features": [
+    "battery_per_seat",
+    "footprint_m2",
+    "volume_proxy_m3",
+    "battery_per_volume",
+    "battery_per_footprint",
+    "torque_per_seat",
+    "torque_per_volume",
+    "aspect_ratio",
+    "height_ratio",
+    "charging_per_battery",
+    "battery_per_towing"
+  ],
   "target": "range_km",
-  "n_training_samples": 478,
-  "final_test_metrics": {
-    "test_MAE": 9.75,
-    "test_RMSE": 14.11,
-    "test_R2": 0.9818,
-    "test_MedianAE": 5.86,
-    "test_MAPE": 2.49
+  "forbidden_features": [
+    "efficiency_wh_per_km",
+    "range_km",
+    "source_url"
+  ],
+  "development_train_size": 382,
+  "holdout_test_size": 96,
+  "final_deployment_fit_size": 478,
+  "seed": 42,
+  "validation_strategy": "10-fold CV on training data, single holdout evaluation",
+  "test_metrics": {
+    "test_MAE": 9.96,
+    "test_RMSE": 13.49,
+    "test_R2": 0.9834,
+    "test_MedianAE": 7.81,
+    "test_MAPE": 2.53
+  },
+  "cv_metrics": {
+    "cv_MAE": 11.68,
+    "cv_MAE_std": 2.47,
+    "cv_R2": 0.9672,
+    "cv_R2_std": 0.0195
   }
 }
