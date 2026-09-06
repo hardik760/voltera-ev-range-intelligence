@@ -488,8 +488,7 @@ def main():
             st.markdown(f"""
             <div class="prediction-box">
                 <div class="prediction-label">Predicted Driving Range</div>
-                <div class="prediction-value">{prediction:.0f} km</div>
-                <div class="prediction-label">{prediction * 0.621:.0f} miles</div>
+                <div class="prediction-value">{prediction:.0f} km ({prediction * 0.621:.0f} miles)</div>
             </div>
             """, unsafe_allow_html=True)
 
