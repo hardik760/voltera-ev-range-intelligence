@@ -3,6 +3,8 @@ TECHTRACK 3.0 — Modeling Module
 
 Model Arena: trains, compares, tunes, and ensembles regression models.
 All results are from actual experiments — nothing fabricated.
+
+LEAKAGE POLICY: No reference to efficiency_wh_per_km.
 """
 
 import numpy as np
@@ -27,6 +29,11 @@ SEED = 42
 def get_model_candidates(scale: bool = False):
     """
     Return a dict of model_name → (model_instance, needs_scaling, complexity).
+
+    Note: monotonic_cst requires knowing the column index in the transformed
+    feature matrix. We do NOT set it here because ColumnTransformer may
+    reorder columns. Instead, we rely on the models learning battery's
+    relationship naturally (it is the strongest predictor at r≈0.88).
     """
     candidates = {
         "DummyRegressor (mean)": (
@@ -49,7 +56,7 @@ def get_model_candidates(scale: bool = False):
             DecisionTreeRegressor(random_state=SEED, max_depth=8), False, "low"
         ),
         "Random Forest": (
-            RandomForestRegressor(n_estimators=200, random_state=SEED, n_jobs=-1, monotonic_cst={"battery_capacity_kWh": 1}),
+            RandomForestRegressor(n_estimators=200, random_state=SEED, n_jobs=-1),
             False, "medium"
         ),
         "Extra Trees": (
@@ -66,7 +73,7 @@ def get_model_candidates(scale: bool = False):
         "HistGradientBoosting": (
             HistGradientBoostingRegressor(
                 max_iter=200, max_depth=6, learning_rate=0.1,
-                random_state=SEED, monotonic_cst={"battery_capacity_kWh": 1}
+                random_state=SEED,
             ),
             False, "medium"
         ),
@@ -82,7 +89,6 @@ def get_model_candidates(scale: bool = False):
             XGBRegressor(
                 n_estimators=200, max_depth=5, learning_rate=0.1,
                 random_state=SEED, n_jobs=-1, verbosity=0,
-                monotone_constraints={"battery_capacity_kWh": 1}
             ),
             False, "medium"
         )
@@ -134,51 +140,52 @@ def run_cross_validation(pipeline, X, y, cv=10, scoring=None):
 def get_tuning_params():
     """
     Return hyperparameter search spaces for top models.
-    Designed for a ~478-row dataset — not excessively large.
+    Pipeline structure is: preprocessor → model
+    So parameter prefix is 'model__'.
     """
     params = {
         "Random Forest": {
-            "base_pipeline__model__n_estimators": [100, 200, 300, 500],
-            "base_pipeline__model__max_depth": [6, 8, 10, 12, None],
-            "base_pipeline__model__min_samples_split": [2, 5, 10],
-            "base_pipeline__model__min_samples_leaf": [1, 2, 4],
-            "base_pipeline__model__max_features": ["sqrt", "log2", 0.5, 0.8],
+            "model__n_estimators": [100, 200, 300, 500],
+            "model__max_depth": [6, 8, 10, 12, None],
+            "model__min_samples_split": [2, 5, 10],
+            "model__min_samples_leaf": [1, 2, 4],
+            "model__max_features": ["sqrt", "log2", 0.5, 0.8],
         },
         "Extra Trees": {
-            "base_pipeline__model__n_estimators": [100, 200, 300, 500],
-            "base_pipeline__model__max_depth": [6, 8, 10, 12, None],
-            "base_pipeline__model__min_samples_split": [2, 5, 10],
-            "base_pipeline__model__min_samples_leaf": [1, 2, 4],
-            "base_pipeline__model__max_features": ["sqrt", "log2", 0.5, 0.8],
+            "model__n_estimators": [100, 200, 300, 500],
+            "model__max_depth": [6, 8, 10, 12, None],
+            "model__min_samples_split": [2, 5, 10],
+            "model__min_samples_leaf": [1, 2, 4],
+            "model__max_features": ["sqrt", "log2", 0.5, 0.8],
         },
         "Gradient Boosting": {
-            "base_pipeline__model__n_estimators": [100, 200, 300, 500],
-            "base_pipeline__model__max_depth": [3, 4, 5, 6],
-            "base_pipeline__model__learning_rate": [0.01, 0.05, 0.1, 0.15],
-            "base_pipeline__model__min_samples_split": [2, 5, 10],
-            "base_pipeline__model__min_samples_leaf": [1, 2, 4],
-            "base_pipeline__model__subsample": [0.7, 0.8, 0.9, 1.0],
+            "model__n_estimators": [100, 200, 300, 500],
+            "model__max_depth": [3, 4, 5, 6],
+            "model__learning_rate": [0.01, 0.05, 0.1, 0.15],
+            "model__min_samples_split": [2, 5, 10],
+            "model__min_samples_leaf": [1, 2, 4],
+            "model__subsample": [0.7, 0.8, 0.9, 1.0],
         },
         "HistGradientBoosting": {
-            "base_pipeline__model__max_iter": [100, 200, 300, 500],
-            "base_pipeline__model__max_depth": [4, 5, 6, 8, 10],
-            "base_pipeline__model__learning_rate": [0.01, 0.05, 0.1, 0.15],
-            "base_pipeline__model__min_samples_leaf": [5, 10, 20, 30],
-            "base_pipeline__model__max_leaf_nodes": [15, 31, 63, None],
+            "model__max_iter": [100, 200, 300, 500],
+            "model__max_depth": [4, 5, 6, 8, 10],
+            "model__learning_rate": [0.01, 0.05, 0.1, 0.15],
+            "model__min_samples_leaf": [5, 10, 20, 30],
+            "model__max_leaf_nodes": [15, 31, 63, None],
         },
     }
 
     try:
         from xgboost import XGBRegressor
         params["XGBoost"] = {
-            "base_pipeline__model__n_estimators": [100, 200, 300, 500],
-            "base_pipeline__model__max_depth": [3, 4, 5, 6, 8],
-            "base_pipeline__model__learning_rate": [0.01, 0.05, 0.1, 0.15],
-            "base_pipeline__model__min_child_weight": [1, 3, 5],
-            "base_pipeline__model__subsample": [0.7, 0.8, 0.9, 1.0],
-            "base_pipeline__model__colsample_bytree": [0.5, 0.7, 0.8, 1.0],
-            "base_pipeline__model__reg_alpha": [0, 0.01, 0.1],
-            "base_pipeline__model__reg_lambda": [0.5, 1.0, 2.0],
+            "model__n_estimators": [100, 200, 300, 500],
+            "model__max_depth": [3, 4, 5, 6, 8],
+            "model__learning_rate": [0.01, 0.05, 0.1, 0.15],
+            "model__min_child_weight": [1, 3, 5],
+            "model__subsample": [0.7, 0.8, 0.9, 1.0],
+            "model__colsample_bytree": [0.5, 0.7, 0.8, 1.0],
+            "model__reg_alpha": [0, 0.01, 0.1],
+            "model__reg_lambda": [0.5, 1.0, 2.0],
         }
     except ImportError:
         pass
@@ -186,15 +193,15 @@ def get_tuning_params():
     try:
         from lightgbm import LGBMRegressor
         params["LightGBM"] = {
-            "base_pipeline__model__n_estimators": [100, 200, 300, 500],
-            "base_pipeline__model__max_depth": [4, 5, 6, 8, -1],
-            "base_pipeline__model__learning_rate": [0.01, 0.05, 0.1, 0.15],
-            "base_pipeline__model__num_leaves": [15, 31, 63, 127],
-            "base_pipeline__model__min_child_samples": [5, 10, 20],
-            "base_pipeline__model__subsample": [0.7, 0.8, 0.9, 1.0],
-            "base_pipeline__model__colsample_bytree": [0.5, 0.7, 0.8, 1.0],
-            "base_pipeline__model__reg_alpha": [0, 0.01, 0.1],
-            "base_pipeline__model__reg_lambda": [0, 0.5, 1.0],
+            "model__n_estimators": [100, 200, 300, 500],
+            "model__max_depth": [4, 5, 6, 8, -1],
+            "model__learning_rate": [0.01, 0.05, 0.1, 0.15],
+            "model__num_leaves": [15, 31, 63, 127],
+            "model__min_child_samples": [5, 10, 20],
+            "model__subsample": [0.7, 0.8, 0.9, 1.0],
+            "model__colsample_bytree": [0.5, 0.7, 0.8, 1.0],
+            "model__reg_alpha": [0, 0.01, 0.1],
+            "model__reg_lambda": [0, 0.5, 1.0],
         }
     except ImportError:
         pass
@@ -242,6 +249,7 @@ def build_ensemble(base_models: dict, X, y, cv=10):
     ensembles["Voting (Average)"] = voting
 
     # Stacking with Ridge meta-learner
+    from sklearn.linear_model import Ridge
     stacking = StackingRegressor(
         estimators=estimators,
         final_estimator=Ridge(alpha=1.0, random_state=SEED),

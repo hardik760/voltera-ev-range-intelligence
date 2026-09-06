@@ -1,15 +1,15 @@
 {
-  "model": "Tuned XGBoost",
-  "feature_set": "specs_plus_engineered",
-  "cv_MAE": 12.36,
-  "cv_MAE_std": 2.03,
-  "cv_RMSE": 18.05,
-  "cv_RMSE_std": 3.98,
-  "cv_R2": 0.9652,
-  "cv_R2_std": 0.0184,
-  "test_MAE": 9.75,
-  "test_RMSE": 14.11,
-  "test_R2": 0.9818,
-  "test_MedianAE": 5.86,
-  "test_MAPE": 2.49
+  "model": "Voting Ensemble",
+  "feature_set": "specs_engineered_cells",
+  "cv_MAE": 11.68,
+  "cv_MAE_std": 2.47,
+  "cv_RMSE": 17.49,
+  "cv_RMSE_std": 4.57,
+  "cv_R2": 0.9672,
+  "cv_R2_std": 0.0195,
+  "test_MAE": 9.96,
+  "test_RMSE": 13.49,
+  "test_R2": 0.9834,
+  "test_MedianAE": 7.81,
+  "test_MAPE": 2.53
 }

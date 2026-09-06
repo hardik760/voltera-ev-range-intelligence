@@ -1,12 +1,17 @@
 """
-TECHTRACK 3.0 — EV Range Intelligence System
+VOLTERA — EV Range Intelligence System
 Interactive Streamlit Application for Live Judge Testing
 
 This app loads the saved preprocessing + model pipeline and provides:
   1. Manual EV specification input
   2. Demo EV preset from the dataset
-  3. Instant range prediction with top influencing factors
-  4. Input validation and graceful error handling
+  3. Instant range prediction with physics sanity checking
+  4. What-if analysis
+  5. Model explainability
+  6. Input validation and graceful error handling
+
+LEAKAGE POLICY: This app NEVER requires or uses efficiency_wh_per_km.
+The pipeline predicts range_km directly from specifications.
 """
 
 import os
@@ -17,15 +22,12 @@ import pandas as pd
 import streamlit as st
 import joblib
 
-# Make sure we can import src.physics
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if PROJECT_ROOT not in sys.path:
-    sys.path.append(PROJECT_ROOT)
-
-from src.physics import PhysicsResidualRegressor
-# ---------------------------------------------------------------------------
+# Project imports
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(APP_DIR)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 MODEL_DIR = os.path.join(PROJECT_ROOT, "models")
 DATA_DIR = os.path.join(PROJECT_ROOT, "data", "raw")
 
@@ -36,7 +38,7 @@ META_PATH = os.path.join(MODEL_DIR, "pipeline_metadata.json")
 # Page Configuration
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="EV Range Intelligence — TECHTRACK 3.0",
+    page_title="VOLTERA — EV Range Intelligence",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -44,50 +46,72 @@ st.set_page_config(
 
 
 # ---------------------------------------------------------------------------
-# Custom CSS
+# Custom CSS — clean EV engineering aesthetic
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    
+    html, body, [class*="st-"] {
+        font-family: 'Inter', sans-serif;
+    }
     .main-header {
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #1B5E20;
+        font-size: 2.0rem;
+        font-weight: 800;
+        color: #0d1b2a;
         text-align: center;
-        padding: 0.5rem 0;
+        padding: 0.5rem 0 0 0;
+        letter-spacing: -0.02em;
+    }
+    .brand-sigma {
+        color: #2563eb;
     }
     .sub-header {
-        font-size: 1.0rem;
-        color: #666;
+        font-size: 0.95rem;
+        color: #64748b;
         text-align: center;
         margin-bottom: 1.5rem;
+        font-weight: 400;
     }
     .prediction-box {
-        background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
+        background: linear-gradient(135deg, #0d1b2a 0%, #1b3a5c 100%);
         padding: 2rem;
         border-radius: 12px;
         text-align: center;
         color: white;
         margin: 1rem 0;
+        border: 1px solid #1e40af;
     }
     .prediction-value {
-        font-size: 3rem;
+        font-size: 3.2rem;
         font-weight: 800;
         margin: 0.5rem 0;
+        letter-spacing: -0.02em;
     }
     .prediction-label {
-        font-size: 1.1rem;
-        opacity: 0.9;
+        font-size: 1.0rem;
+        opacity: 0.85;
+        font-weight: 400;
     }
     .info-card {
-        background: #f8f9fa;
-        padding: 1rem;
+        background: #f8fafc;
+        padding: 1rem 1.2rem;
         border-radius: 8px;
-        border-left: 4px solid #1B5E20;
+        border-left: 3px solid #2563eb;
         margin: 0.5rem 0;
-    }
-    .warning-text {
-        color: #E65100;
         font-size: 0.9rem;
+    }
+    .limitation-note {
+        background: #fffbeb;
+        border-left: 3px solid #d97706;
+        padding: 0.8rem 1rem;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        color: #92400e;
+        margin-top: 1rem;
+    }
+    div[data-testid="stSidebar"] {
+        background: #f8fafc;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -153,12 +177,12 @@ DEFAULTS = {
     "car_body_type": "SUV",
 }
 
+
 def prepare_input(input_dict: dict, metadata: dict) -> pd.DataFrame:
     """Prepare a single-row DataFrame matching the pipeline's expected features."""
     numeric_features = metadata.get("numeric_features", [])
     categorical_features = metadata.get("categorical_features", [])
 
-    # Build the initial row
     row = {}
     for feat in numeric_features + categorical_features:
         row[feat] = input_dict.get(feat, np.nan)
@@ -173,7 +197,7 @@ def prepare_input(input_dict: dict, metadata: dict) -> pd.DataFrame:
     # Add engineered features using the shared module
     from src.feature_engineering import engineer_features
     df = engineer_features(df)
-    
+
     return df
 
 
@@ -183,29 +207,56 @@ def prepare_input(input_dict: dict, metadata: dict) -> pd.DataFrame:
 def main():
     pipeline, metadata = load_pipeline()
 
-    st.markdown('<div class="main-header">⚡ EV Range Intelligence System</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">TECHTRACK 3.0 — Specification-Based EV Range Prediction</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="main-header">VOLT<span class="brand-sigma">Σ</span>RA</div>',
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        '<div class="sub-header">EV Range Intelligence System — TECHTRACK 3.0</div>',
+        unsafe_allow_html=True
+    )
 
     if pipeline is None:
-        st.error("❌ Pipeline not found. Please run `run_pipeline.py` first to train and save the model.")
+        st.error("Pipeline not found. Run `python run_pipeline.py` first.")
         st.stop()
 
     # Sidebar
-    st.sidebar.header("🔧 Input Mode")
+    st.sidebar.header("Input Mode")
     input_mode = st.sidebar.radio(
         "Select mode:",
         ["Manual Input", "Demo EV Preset"],
         index=0,
     )
 
-    # Model info
-    with st.sidebar.expander("ℹ️ Model Info"):
-        st.write(f"**Model:** {metadata.get('model_name', 'N/A')}")
-        test_metrics = metadata.get("final_test_metrics", {})
+    # Model info in sidebar
+    with st.sidebar.expander("Model Information"):
+        model_name = metadata.get("final_model_name", metadata.get("model_name", "N/A"))
+        st.write(f"**Final Model:** {model_name}")
+        
+        test_metrics = metadata.get("test_metrics", metadata.get("final_test_metrics", {}))
+        cv_metrics = metadata.get("cv_metrics", {})
+        
         if test_metrics:
-            st.write(f"**Test MAE:** {test_metrics.get('test_MAE', 'N/A')} km")
-            st.write(f"**Test R²:** {test_metrics.get('test_R2', 'N/A')}")
-        st.write(f"**Training samples:** {metadata.get('n_training_samples', 'N/A')}")
+            st.write(f"**Holdout Test MAE:** {test_metrics.get('test_MAE', 'N/A')} km")
+            st.write(f"**Holdout Test R²:** {test_metrics.get('test_R2', 'N/A')}")
+            st.write(f"**Holdout Test RMSE:** {test_metrics.get('test_RMSE', 'N/A')} km")
+        
+        if cv_metrics:
+            st.write(f"**CV MAE:** {cv_metrics.get('cv_MAE', 'N/A')} km")
+            st.write(f"**CV R²:** {cv_metrics.get('cv_R2', 'N/A')}")
+        
+        dev_train = metadata.get("development_train_size", "N/A")
+        holdout = metadata.get("holdout_test_size", "N/A")
+        deploy = metadata.get("final_deployment_fit_size", metadata.get("n_training_samples", "N/A"))
+        
+        st.write("---")
+        st.write(f"**Development train:** {dev_train}")
+        st.write(f"**Holdout test:** {holdout}")
+        st.write(f"**Final deployment fit:** {deploy}")
+        
+        st.write("---")
+        st.write("**Leakage status:** efficiency_wh_per_km excluded")
+        st.write("**Validation:** 10-fold CV on training data")
 
     # Input collection
     input_dict = {}
@@ -213,7 +264,6 @@ def main():
     if input_mode == "Demo EV Preset":
         demo_df = load_demo_data()
         if demo_df is not None:
-            # Create display names, ensuring string types to avoid TypeError
             demo_df["display_name"] = demo_df["brand"].astype(str) + " " + demo_df["model"].fillna("").astype(str)
             selected = st.sidebar.selectbox(
                 "Select a demo EV:",
@@ -222,9 +272,9 @@ def main():
             )
             row = demo_df[demo_df["display_name"] == selected].iloc[0]
 
-            st.info(f"📋 Loaded preset: **{selected}** (Actual range: {row.get('range_km', 'N/A')} km)")
+            actual_range = row.get("range_km", "N/A")
+            st.info(f"Loaded preset: **{selected}** (Actual range: {actual_range} km)")
 
-            # Fill inputs from dataset
             for key in DEFAULTS.keys():
                 if key in row.index:
                     val = row[key]
@@ -238,11 +288,11 @@ def main():
     if input_mode == "Manual Input":
         st.sidebar.markdown("---")
 
-    # Input widgets (shown in both modes, editable in manual mode)
+    # Input widgets
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.subheader("🔋 Battery & Charging")
+        st.subheader("Battery & Charging")
         input_dict["battery_capacity_kWh"] = st.number_input(
             "Battery Capacity (kWh)",
             min_value=10.0, max_value=250.0, step=1.0,
@@ -254,7 +304,7 @@ def main():
             value=float(input_dict.get("fast_charging_power_kw_dc", DEFAULTS["fast_charging_power_kw_dc"])),
         )
 
-        st.subheader("⚡ Performance")
+        st.subheader("Performance")
         input_dict["torque_nm"] = st.number_input(
             "Torque (Nm)",
             min_value=50.0, max_value=2000.0, step=10.0,
@@ -266,13 +316,13 @@ def main():
             value=int(input_dict.get("top_speed_kmh", DEFAULTS["top_speed_kmh"])),
         )
         input_dict["acceleration_0_100_s"] = st.number_input(
-            "0–100 km/h (seconds)",
+            "0-100 km/h (seconds)",
             min_value=1.5, max_value=25.0, step=0.1,
             value=float(input_dict.get("acceleration_0_100_s", DEFAULTS["acceleration_0_100_s"])),
         )
 
     with col2:
-        st.subheader("📐 Dimensions")
+        st.subheader("Dimensions")
         input_dict["length_mm"] = st.number_input(
             "Length (mm)", min_value=2500, max_value=7000, step=10,
             value=int(input_dict.get("length_mm", DEFAULTS["length_mm"])),
@@ -286,7 +336,7 @@ def main():
             value=int(input_dict.get("height_mm", DEFAULTS["height_mm"])),
         )
 
-        st.subheader("🪑 Utility")
+        st.subheader("Utility")
         input_dict["seats"] = st.number_input(
             "Seats", min_value=1, max_value=12, step=1,
             value=int(input_dict.get("seats", DEFAULTS["seats"])),
@@ -301,7 +351,7 @@ def main():
         )
 
     with col3:
-        st.subheader("🚗 Vehicle Type")
+        st.subheader("Vehicle Type")
         input_dict["drivetrain"] = st.selectbox(
             "Drivetrain", DRIVETRAIN_OPTIONS,
             index=DRIVETRAIN_OPTIONS.index(
@@ -324,22 +374,11 @@ def main():
     # Predict button
     st.markdown("---")
 
-    if st.button("🔮 Predict Range", type="primary", use_container_width=True):
+    if st.button("Predict Range", type="primary", use_container_width=True):
         try:
-            # Prepare input
             input_df = prepare_input(input_dict, metadata)
-
-            # Predict
             prediction = pipeline.predict(input_df)[0]
             prediction = max(prediction, 0)  # Range can't be negative
-
-            # Generate Uncertainty Bands (if VotingRegressor)
-            uncertainty_html = ""
-            if hasattr(pipeline, "estimators_"):
-                preds = [max(0, est.predict(input_df)[0]) for est in pipeline.estimators_]
-                std_pred = np.std(preds)
-                range_str = f"{prediction - std_pred:.0f} - {prediction + std_pred:.0f}"
-                uncertainty_html = f'<div class="prediction-label">95% Confidence Interval: ±{std_pred * 1.96:.0f} km</div>'
 
             # Display prediction
             st.markdown(f"""
@@ -347,7 +386,6 @@ def main():
                 <div class="prediction-label">Predicted Driving Range</div>
                 <div class="prediction-value">{prediction:.0f} km</div>
                 <div class="prediction-label">{prediction * 0.621:.0f} miles</div>
-                {uncertainty_html}
             </div>
             """, unsafe_allow_html=True)
 
@@ -358,54 +396,79 @@ def main():
                 st.metric("Implied Energy Consumption", f"{implied_wh:.0f} Wh/km")
             with col_b:
                 plausible = 80 <= implied_wh <= 400
-                st.metric("Physics Check", "✅ Plausible" if plausible else "⚠️ Review")
+                st.metric("Physics Check", "Plausible" if plausible else "Review needed")
             with col_c:
                 st.metric("Battery Capacity", f"{input_dict['battery_capacity_kWh']:.1f} kWh")
 
             if not plausible:
                 st.warning(
                     f"The implied energy consumption ({implied_wh:.0f} Wh/km) is outside "
-                    f"the typical EV range (80–400 Wh/km). This may indicate extreme input values."
+                    f"the typical EV range (80-400 Wh/km). This may indicate extreme input values."
                 )
 
-            st.info(
-                "**Judge Note (Edge-Case Vulnerability):** The dataset lacks an Aerodynamic Drag Coefficient (Cd). "
-                "Because of this, the model strictly uses physical dimensions (Length/Width/Height) to infer aerodynamic resistance. "
-                "The model will inherently **under-predict** the range of hyper-aerodynamic luxury vehicles (like the Lucid Air Grand Touring, Cd=0.197) "
-                "because it cannot mathematically distinguish them from standard sedans of the same size. "
-                "We preserved this limitation to maintain zero data leakage, rather than artificially inflating the predictions."
-            )
-
-            # Top factors
-            st.subheader("🧠 Live Model Explanation (SHAP)")
-            st.markdown("This waterfall chart explains **exactly** why the model predicted this range. The baseline (bottom) is purely physics-derived (Segment Median Efficiency × Battery). The ML model's entire job is to predict the *residual* (how this specific EV deviates from the physics baseline).")
+            # What-if analysis
+            st.subheader("What-If Analysis")
+            st.caption("Change one parameter to see how the predicted range responds.")
+            
+            wif_col1, wif_col2 = st.columns(2)
+            with wif_col1:
+                wif_param = st.selectbox("Parameter to vary", [
+                    "battery_capacity_kWh", "top_speed_kmh", "torque_nm",
+                    "acceleration_0_100_s", "length_mm", "width_mm", "height_mm"
+                ])
+            with wif_col2:
+                current_val = float(input_dict.get(wif_param, 0))
+                wif_range_pct = st.slider("Variation range (%)", 10, 100, 50)
+            
+            lo = current_val * (1 - wif_range_pct / 100)
+            hi = current_val * (1 + wif_range_pct / 100)
+            wif_values = np.linspace(lo, hi, 15)
+            wif_preds = []
+            for v in wif_values:
+                wif_dict = input_dict.copy()
+                wif_dict[wif_param] = v
+                wif_df = prepare_input(wif_dict, metadata)
+                wif_preds.append(max(0, pipeline.predict(wif_df)[0]))
             
             import matplotlib.pyplot as plt
-            import shap
-            
-            # Extract tree model for SHAP
-            if hasattr(pipeline, "estimators_"):
-                # Use the first estimator (e.g. HistGradientBoosting) for explainability
-                phys_reg = pipeline.estimators_[0]
-            else:
-                phys_reg = pipeline
-                
-            base_pipe = phys_reg.base_pipeline
-            preprocessor = base_pipe.named_steps["preprocessor"]
-            model = base_pipe.named_steps["model"]
-            
-            X_transformed = preprocessor.transform(input_df)
-            
-            explainer = shap.TreeExplainer(model)
-            shap_values = explainer(X_transformed)
-            
-            # Adjust base value for Physics Baseline
-            physics_baseline = phys_reg._compute_baseline(input_df)[0]
-            shap_values.base_values = shap_values.base_values + physics_baseline
-            
-            fig, ax = plt.subplots(figsize=(10, 6))
-            shap.plots.waterfall(shap_values[0], show=False)
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.plot(wif_values, wif_preds, "o-", color="#2563eb", linewidth=2, markersize=4)
+            ax.axvline(current_val, color="red", linestyle="--", alpha=0.6, label=f"Current: {current_val:.0f}")
+            ax.axhline(prediction, color="gray", linestyle=":", alpha=0.4)
+            ax.set_xlabel(wif_param.replace("_", " "))
+            ax.set_ylabel("Predicted Range (km)")
+            ax.set_title(f"Sensitivity: {wif_param.replace('_', ' ')}")
+            ax.legend()
+            ax.grid(True, alpha=0.3)
             st.pyplot(fig)
+            plt.close()
+
+            # Explainability — permutation importance from saved file
+            st.subheader("Feature Importance")
+            perm_path = os.path.join(PROJECT_ROOT, "outputs", "metrics", "permutation_importance.csv")
+            if os.path.exists(perm_path):
+                perm_df = pd.read_csv(perm_path).head(10)
+                fig, ax = plt.subplots(figsize=(8, 4))
+                perm_plot = perm_df.sort_values("importance_mean")
+                ax.barh(perm_plot["feature"], perm_plot["importance_mean"],
+                        xerr=perm_plot["importance_std"], color="#2563eb", alpha=0.85)
+                ax.set_xlabel("Permutation Importance")
+                ax.set_title("Top 10 Features by Importance")
+                st.pyplot(fig)
+                plt.close()
+            else:
+                st.info("Run the pipeline to generate feature importance data.")
+
+            # Limitation note
+            st.markdown("""
+            <div class="limitation-note">
+            <strong>Limitations:</strong> This model predicts official rated range from static specifications only.
+            It does not account for weather, driving style, terrain, HVAC usage, or battery degradation.
+            The dataset lacks aerodynamic drag coefficient (Cd) and vehicle weight, which limits accuracy
+            for hyper-aerodynamic or unusually heavy vehicles. Tree-based models cannot extrapolate
+            beyond training data ranges.
+            </div>
+            """, unsafe_allow_html=True)
 
         except Exception as e:
             st.error(f"Prediction failed: {str(e)}")
@@ -414,9 +477,9 @@ def main():
     # Footer
     st.markdown("---")
     st.markdown(
-        '<div style="text-align: center; color: #999; font-size: 0.85rem;">'
+        '<div style="text-align: center; color: #94a3b8; font-size: 0.85rem;">'
         'TECHTRACK 3.0 — EV Range Prediction from Specifications<br>'
-        'MANIT Bhopal · Team Voltra · Competition Submission'
+        'MANIT Bhopal &middot; Team Voltra &middot; Competition Submission'
         '</div>',
         unsafe_allow_html=True,
     )

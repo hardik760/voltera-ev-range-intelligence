@@ -1,13 +1,13 @@
 {
-  "mean_abs_error": 9.75,
-  "std_abs_error": 10.19,
+  "mean_abs_error": 9.96,
+  "std_abs_error": 9.09,
   "min_abs_error": 0.09,
-  "p25_abs_error": 2.38,
-  "p50_abs_error": 5.86,
-  "p75_abs_error": 15.26,
-  "p90_abs_error": 21.92,
-  "max_abs_error": 51.97,
-  "within_10km": 58.3,
-  "within_25km": 90.6,
-  "within_50km": 99.0
+  "p25_abs_error": 3.45,
+  "p50_abs_error": 7.81,
+  "p75_abs_error": 13.95,
+  "p90_abs_error": 20.38,
+  "max_abs_error": 47.43,
+  "within_10km": 61.5,
+  "within_25km": 92.7,
+  "within_50km": 100.0
 }
